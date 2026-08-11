@@ -1,0 +1,374 @@
+// Prisma schema - Ứng dụng học tiếng Anh AI
+// 21 bảng chính theo yêu cầu
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// HỆ THỐNG TÀI KHOẢN
+// =====================================================
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String
+  fullName          String
+  avatar            String?
+  role              String   @default("USER") // USER | ADMIN
+  currentLevel      String   @default("A1") // A1, A2, B1, B2, C1, C2
+  targetLevel       String   @default("B1")
+  targetExam        String?  // TOEIC, IELTS, NONE
+  targetScore       Int?
+  dailyMinutes      Int      @default(30)
+  placementDone     Boolean  @default(false)
+  xp                Int      @default(0)
+  level             Int      @default(1)
+  streak            Int      @default(0)
+  longestStreak     Int      @default(0)
+  lastStudyDate     DateTime?
+  totalStudyDays    Int      @default(0)
+  totalStudyMinutes Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  profile                Profile?
+  learningProgress       LearningProgress[]
+  vocabularyReviews      VocabularyReview[]
+  speakingSessions       SpeakingSession[]
+  writingSubmissions     WritingSubmission[]
+  quizAttempts           QuizAttempt[]
+  toeicResults           ToeicResult[]
+  userAchievements       UserAchievement[]
+  dailyLearningPlans     DailyLearningPlan[]
+  aiConversations        AiConversation[]
+  notifications          Notification[]
+  placementResult        PlacementResult?
+}
+
+model Profile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio         String?
+  phone       String?
+  dateOfBirth DateTime?
+  occupation  String?
+  goalNotes   String?  // ghi chú mục tiêu cá nhân
+  preferences String?  // JSON: chủ đề ưa thích
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// =====================================================
+// TIẾN TRÌNH HỌC TẬP
+// =====================================================
+
+model LearningProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill     String   // vocabulary, grammar, listening, reading, speaking, writing
+  score     Float    @default(0)  // 0-100
+  totalTime Int      @default(0)  // phút
+  lessonsDone Int    @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, skill])
+}
+
+// =====================================================
+// TỪ VỰNG
+// =====================================================
+
+model Vocabulary {
+  id            String   @id @default(cuid())
+  word          String
+  ipa           String?
+  meaning       String   // nghĩa tiếng Việt
+  partOfSpeech  String?  // noun, verb, adj, adv...
+  example       String?  // câu ví dụ tiếng Anh
+  exampleVi     String?  // dịch câu ví dụ
+  synonyms      String?  // JSON array
+  antonyms      String?  // JSON array
+  collocations  String?  // JSON array
+  imageUrl      String?
+  audioUrl      String?
+  topic         String   @default("general") // chủ đề
+  level         String   @default("A1")
+  createdAt     DateTime @default(now())
+
+  reviews       VocabularyReview[]
+
+  @@unique([word, level])
+}
+
+model VocabularyReview {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vocabularyId  String
+  vocabulary    Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
+  ease          Float    @default(2.5)   // SM-2 ease factor
+  interval      Int      @default(0)     // ngày
+  repetitions   Int      @default(0)
+  nextReviewAt  DateTime @default(now())
+  isFavorite    Boolean  @default(false)
+  wrongCount    Int      @default(0)
+  correctCount  Int      @default(0)
+  lastResult    String?  // correct, wrong, hard, easy
+  reviewedAt    DateTime @default(now())
+
+  @@unique([userId, vocabularyId])
+}
+
+// =====================================================
+// NGỮ PHÁP
+// =====================================================
+
+model GrammarLesson {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  title        String   // tiếng Anh (nội dung học)
+  titleVi      String   // tiếng Việt
+  category     String   // present, past, future, conditional, passive, relative-clause, gerund-infinitive, modal, articles, prepositions, comparatives, reported-speech, advanced
+  level        String   @default("A1") // A1-C2
+  explanation  String   // giải thích bằng tiếng Việt
+  formula      String?
+  examples     String?  // JSON array
+  notes        String?  // lưu ý tiếng Việt
+  exercises    String?  // JSON array câu hỏi
+  answerKey    String?  // JSON đáp án
+  explanationVi String? // JSON giải thích đáp án tiếng Việt
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+}
+
+// =====================================================
+// LISTENING
+// =====================================================
+
+model ListeningLesson {
+  id           String   @id @default(cuid())
+  title        String
+  titleVi      String
+  level        String   @default("Beginner")
+  topic        String   @default("daily")
+  audioUrl     String?  // placeholder
+  duration     Int      @default(60) // giây
+  transcript   String   // tiếng Anh
+  transcriptVi String   // tiếng Việt
+  questions    String   // JSON array câu hỏi
+  createdAt    DateTime @default(now())
+}
+
+// =====================================================
+// READING
+// =====================================================
+
+model ReadingPassage {
+  id           String   @id @default(cuid())
+  title        String
+  titleVi      String?
+  level        String   @default("A2")
+  topic        String   @default("daily") // daily, business, toeic, ielts
+  content      String   // bài đọc tiếng Anh
+  contentVi    String?  // dịch tiếng Việt
+  keyWords     String?  // JSON
+  questions    String?  // JSON
+  answerKey    String?  // JSON
+  explanationVi String? // JSON
+  createdAt    DateTime @default(now())
+}
+
+// =====================================================
+// SPEAKING & AI CONVERSATION
+// =====================================================
+
+model SpeakingSession {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic       String
+  userText    String
+  aiFeedback  String   // JSON: {pronunciation, fluency, grammar, vocabulary, sentence, naturalness, corrected, explanation}
+  score       Float
+  createdAt   DateTime @default(now())
+}
+
+model AiConversation {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String   // friend, teacher, colleague, recruiter, customer, restaurant, airport
+  messages    String   // JSON array {role, content, vi?}
+  topic       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// =====================================================
+// WRITING
+// =====================================================
+
+model WritingSubmission {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prompt      String
+  content     String
+  aiFeedback  String   // JSON
+  score       Float
+  grammarScore Float
+  spellingScore Float
+  vocabScore  Float
+  structureScore Float
+  coherenceScore Float
+  naturalnessScore Float
+  createdAt   DateTime @default(now())
+}
+
+// =====================================================
+// QUIZ
+// =====================================================
+
+model QuizQuestion {
+  id          String   @id @default(cuid())
+  category    String   // vocab, grammar, listening, reading, reflex
+  level       String   @default("A1")
+  question    String
+  options     String   // JSON array
+  answer      Int      // index
+  explanationVi String?
+  createdAt   DateTime @default(now())
+
+  attempts    QuizAttempt[]
+}
+
+model QuizAttempt {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionId  String
+  question    QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userAnswer  Int
+  isCorrect   Boolean
+  createdAt   DateTime @default(now())
+}
+
+// =====================================================
+// PLACEMENT TEST
+// =====================================================
+
+model PlacementResult {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vocabScore      Float
+  grammarScore    Float
+  readingScore    Float
+  listeningScore  Float
+  reflexScore     Float
+  totalScore      Float
+  level           String   // A1-C2
+  strengths       String?  // JSON
+  weaknesses      String?  // JSON
+  recommendations String?  // JSON
+  learningPath    String?  // JSON lộ trình
+  createdAt       DateTime @default(now())
+}
+
+// =====================================================
+// TOEIC
+// =====================================================
+
+model ToeicTest {
+  id          String   @id @default(cuid())
+  title       String
+  part        String   // listening-1, listening-2, listening-3, listening-4, reading-5, reading-6, reading-7
+  type        String   @default("mini") // mini, full
+  questions   String   // JSON array câu hỏi
+  audioUrl    String?
+  createdAt   DateTime @default(now())
+
+  results     ToeicResult[]
+}
+
+model ToeicResult {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  testId       String
+  test         ToeicTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+  listeningScore Int
+  readingScore   Int
+  totalScore     Int
+  predictedLevel String? // 450, 550, 650...
+  wrongAnswers   String? // JSON
+  createdAt    DateTime @default(now())
+}
+
+// =====================================================
+// GAMIFICATION
+// =====================================================
+
+model Achievement {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  titleVi     String
+  description String?
+  icon        String   // emoji
+  condition   String   // JSON: {type, threshold}
+  xpReward    Int      @default(50)
+
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  unlockedAt    DateTime @default(now())
+
+  @@unique([userId, achievementId])
+}
+
+// =====================================================
+// DAILY LEARNING PLAN
+// =====================================================
+
+model DailyLearningPlan {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime
+  totalMinutes Int     @default(45)
+  activities  String   // JSON: [{type, minutes, title, completed}]
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, date])
+}
+
+// =====================================================
+// NOTIFICATIONS
+// =====================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // reminder, streak, vocab-review, new-lesson, achievement, goal
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
